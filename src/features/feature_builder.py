@@ -1,9 +1,8 @@
 """
 Feature engineering for NBA playoff prediction.
 
-This module provides a comprehensive feature engineering pipeline for NBA playoff prediction,
-creating features from multiple data sources including team statistics, player data,
-injury records, and shot patterns.
+This module provides a feature engineering pipeline for NBA playoff prediction,
+creating features from team statistics, player data, and injury summaries.
 """
 import pandas as pd
 import numpy as np
@@ -23,12 +22,11 @@ class FeatureBuilder:
         ]
         
         self._required_player_cols = [
-            'season', 'tm', 'experience', 'pos', 'age'
+            'season', 'team', 'experience', 'age'
         ]
         
-        self._required_shot_cols = [
-            'SEASON_1', 'TEAM_NAME', 'EVENT_TYPE', 'SHOT_TYPE',
-            'SHOT_DISTANCE', 'LOC_X', 'LOC_Y'
+        self._required_injury_cols = [
+            'year', 'team', 'count'
         ]
     
     def _validate_columns(self, df: pd.DataFrame, required_cols: list, source: str) -> None:
@@ -86,15 +84,14 @@ class FeatureBuilder:
         
         Args:
             player_stats: DataFrame containing player statistics
-            injuries: DataFrame containing injury data
+            injuries: DataFrame containing injury summary data
         
         Returns:
             DataFrame with team-level features including player stats and injury counts
         """
         # Input validation
         self._validate_columns(player_stats, self._required_player_cols, "player")
-        if injuries.empty:
-            return pd.DataFrame()
+        self._validate_columns(injuries, self._required_injury_cols, "injuries")
             
         # Create copies to avoid modifying original data
         player_stats = player_stats.copy()
@@ -102,12 +99,7 @@ class FeatureBuilder:
         
         try:
             # Process player stats
-            player_stats['team'] = player_stats['tm']  # Already standardized in cleaning
             player_stats['season'] = player_stats['season'].astype(int)
-            
-            # Process injuries
-            injuries['team'] = injuries['Team'].str.strip().upper()
-            injuries['season'] = pd.to_datetime(injuries['Date']).dt.year
             
             # Create team-level aggregations
             team_stats = player_stats.groupby(['team', 'season']).agg({
@@ -124,24 +116,15 @@ class FeatureBuilder:
                 'avg_age', 'max_age', 'min_age'
             ]
             
-            # Calculate position distributions
-            pos_dist = (player_stats.groupby(['team', 'season'])['pos']
-                    .value_counts(normalize=True)
-                    .unstack(fill_value=0)
-                    .add_prefix('pos_pct_')
-                    .reset_index())
-            
-            # Calculate injury counts
-            injury_counts = (injuries.groupby(['team', 'season'])
-                            .size()
-                            .reset_index(name='injury_count'))
+            # Process injuries
+            injuries = injuries.rename(columns={'year': 'season'})
+            injuries['season'] = injuries['season'].astype(int)
             
             # Merge all features
-            features = (team_stats.merge(pos_dist, on=['team', 'season'])
-                    .merge(injury_counts, on=['team', 'season'], how='left'))
+            features = team_stats.merge(injuries, on=['team', 'season'], how='left')
             
             # Fill missing values
-            features['injury_count'] = features['injury_count'].fillna(0)
+            features['count'] = features['count'].fillna(0)
             
             # Store statistics
             self.feature_stats['player_features'] = {
@@ -155,57 +138,7 @@ class FeatureBuilder:
             print(f"Error creating player features: {str(e)}")
             return pd.DataFrame()
     
-    def create_shot_features(self, shots: pd.DataFrame) -> pd.DataFrame:
-        """Create team-level features from shot data."""
-        self._validate_columns(shots, self._required_shot_cols, "shots")
-        
-        # Create a copy and standardize column names
-        df = shots.copy()
-        df['season'] = df['SEASON_1']
-        df['team'] = df['TEAM_NAME']  # Already standardized in cleaning
-        
-        # Convert columns to string type before using str methods
-        df['EVENT_TYPE'] = df['EVENT_TYPE'].astype(str)
-        df['SHOT_TYPE'] = df['SHOT_TYPE'].astype(str)
-        
-        df['shot_made'] = df['EVENT_TYPE'].str.contains('MADE')
-        df['is_three'] = df['SHOT_TYPE'].str.contains('3PT')
-        df['shot_distance'] = df['SHOT_DISTANCE']
-        
-        # Drop any NaN values
-        df = df.dropna(subset=['shot_made', 'is_three', 'shot_distance', 'LOC_X', 'LOC_Y'])
-        
-        # Group shots by team and season
-        shot_features = df.groupby(['team', 'season']).agg({
-            'shot_made': 'mean',
-            'is_three': 'mean',
-            'shot_distance': ['mean', 'std'],
-            'LOC_X': ['mean', 'std'],
-            'LOC_Y': ['mean', 'std']
-        }).reset_index()
-        
-        # Flatten column names
-        shot_features.columns = [
-            'team', 'season', 'fg_pct', 'three_point_rate',
-            'avg_shot_distance', 'shot_distance_std',
-            'avg_loc_x', 'loc_x_std',
-            'avg_loc_y', 'loc_y_std'
-        ]
-        
-        # Add relative to league average
-        for col in ['fg_pct', 'three_point_rate', 'avg_shot_distance']:
-            league_avg = shot_features[col].mean()
-            shot_features[f'{col}_vs_avg'] = shot_features[col] - league_avg
-        
-        self.feature_stats['shot_features'] = {
-            'n_features': len(shot_features.columns),
-            'n_samples': len(shot_features)
-        }
-        
-        return shot_features
-    
-    def combine_features(self, team_features: pd.DataFrame, player_features: pd.DataFrame,
-                        shot_features: pd.DataFrame) -> tuple:
+    def combine_features(self, team_features: pd.DataFrame, player_features: pd.DataFrame) -> tuple:
         """Combine all feature sets and create target variable."""
         if 'playoffs' not in team_features.columns:
             raise ValueError("Team features must include 'playoffs' column for target variable")
@@ -213,24 +146,17 @@ class FeatureBuilder:
         # Create copies to avoid modifying originals
         team_features = team_features.copy()
         player_features = player_features.copy()
-        shot_features = shot_features.copy()
         
         # Ensure team and season columns are the correct type
-        for df in [team_features, player_features, shot_features]:
+        for df in [team_features, player_features]:
             df['team'] = df['team'].astype(str)
             df['season'] = df['season'].astype(int)
         
         # Merge all features
-        features = (
-            team_features.merge(
-                player_features,
-                on=['team', 'season'],
-                how='left'
-            ).merge(
-                shot_features,
-                on=['team', 'season'],
-                how='left'
-            )
+        features = team_features.merge(
+            player_features,
+            on=['team', 'season'],
+            how='left'
         )
         
         # Create target variable
