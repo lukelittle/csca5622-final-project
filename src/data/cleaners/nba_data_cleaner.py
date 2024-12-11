@@ -90,6 +90,7 @@ class NBACleaner:
             'HORNETS': 'CHA',
             'CHARLOTTE HORNETS': 'CHA',
             'CHARLOTTE BOBCATS': 'CHA',
+            'BOBCATS':  'CHA',
             
             'NETS': 'BKN',
             'BROOKLYN NETS': 'BKN',
