@@ -15,7 +15,7 @@ import numpy as np
 from pathlib import Path
 import os
 
-class BaseNBACleaner:
+class NBACleaner:
     def __init__(self):
         """Initialize the cleaner with project directory structure."""
         self.project_root = Path(os.getcwd())
