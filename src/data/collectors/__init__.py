@@ -1,1 +1,3 @@
-"""Data collector modules for NBA data sources"""
+"""
+This package contains data collectors for downloading datasets from various sources.
+"""

@@ -9,9 +9,6 @@ This module serves as the foundation for all NBA data cleaners, providing:
    - Numeric data handling
    - Date conversion
    - Percentage normalization
-
-These shared operations ensure consistency across different data sources
-and maintain data quality standards throughout the project.
 """
 import pandas as pd
 import numpy as np
@@ -19,36 +16,8 @@ from pathlib import Path
 import os
 
 class BaseNBACleaner:
-    """
-    Base class containing shared cleaning methods for NBA data.
-    
-    This class provides fundamental cleaning operations that are common
-    across different NBA data sources. It ensures consistent handling of:
-    - Team names (e.g., "GSW" -> "Golden State Warriors")
-    - Player names (standardized capitalization and formatting)
-    - Numeric values (proper type conversion and missing value handling)
-    - Dates (consistent datetime format)
-    - Percentages (conversion from string "45.6%" to float 0.456)
-    
-    The class also sets up the project's directory structure for:
-    - Raw data storage
-    - Processed data output
-    - Historical vs current season data separation
-    """
-    
     def __init__(self):
-        """
-        Initialize the cleaner with project directory structure.
-        
-        Sets up paths for:
-        - Project root: Main project directory
-        - Base data directory: Contains all data-related subdirectories
-        - Raw data: Original, unmodified data files
-        - Processed data: Cleaned and transformed data
-            - Historical: Past seasons' data
-            - Current: Current season data
-            - Combined: Merged historical and current data
-        """
+        """Initialize the cleaner with project directory structure."""
         self.project_root = Path(os.getcwd())
         self.base_dir = self.project_root / 'data'
         self.raw_dir = self.base_dir / 'raw'
@@ -57,15 +26,133 @@ class BaseNBACleaner:
         # Create processed data directories if they don't exist
         for subdir in ['historical', 'current', 'combined']:
             (self.processed_dir / subdir).mkdir(parents=True, exist_ok=True)
+        
+        # Define team name mappings for historical teams
+        self.team_mappings = {
+            'BULLETS': 'WAS',
+            'WASHINGTON BULLETS': 'WAS',
+            'CAPITAL BULLETS': 'WAS',
+            'BALTIMORE BULLETS': 'WAS',
+            'WASHINGTON WIZARDS': 'WAS',
+            'CHICAGO ZEPHYRS': 'WAS',
+            'CHICAGO PACKERS': 'WAS',
+            
+            'HAWKS': 'ATL',
+            'ATLANTA HAWKS': 'ATL',
+            'ST. LOUIS HAWKS': 'ATL',
+            'MILWAUKEE HAWKS': 'ATL',
+            'TRI-CITIES BLACKHAWKS': 'ATL',
+            
+            'CLIPPERS': 'LAC',
+            'LA CLIPPERS': 'LAC',
+            'LOS ANGELES CLIPPERS': 'LAC',
+            'BUFFALO BRAVES': 'LAC',
+            'SAN DIEGO CLIPPERS': 'LAC',
+            
+            'KINGS': 'SAC',
+            'SACRAMENTO KINGS': 'SAC',
+            'KANSAS CITY KINGS': 'SAC',
+            'CINCINNATI ROYALS': 'SAC',
+            'ROCHESTER ROYALS': 'SAC',
+            
+            '76ERS': 'PHI',
+            'SIXERS': 'PHI',
+            'PHILADELPHIA 76ERS': 'PHI',
+            'SYRACUSE NATIONALS': 'PHI',
+            
+            'LAKERS': 'LAL',
+            'LA LAKERS': 'LAL',
+            'LOS ANGELES LAKERS': 'LAL',
+            'MINNEAPOLIS LAKERS': 'LAL',
+            
+            'ROCKETS': 'HOU',
+            'HOUSTON ROCKETS': 'HOU',
+            'SAN DIEGO ROCKETS': 'HOU',
+            
+            'THUNDER': 'OKC',
+            'OKLAHOMA CITY THUNDER': 'OKC',
+            'SEATTLE SUPERSONICS': 'OKC',
+            'SONICS': 'OKC',
+            
+            'GRIZZLIES': 'MEM',
+            'MEMPHIS GRIZZLIES': 'MEM',
+            'VANCOUVER GRIZZLIES': 'MEM',
+            
+            'PELICANS': 'NOP',
+            'NEW ORLEANS PELICANS': 'NOP',
+            'NEW ORLEANS HORNETS': 'NOP',
+            'NEW ORLEANS/OKLAHOMA CITY HORNETS': 'NOP',
+            
+            'JAZZ': 'UTA',
+            'UTAH JAZZ': 'UTA',
+            'NEW ORLEANS JAZZ': 'UTA',
+            
+            'HORNETS': 'CHA',
+            'CHARLOTTE HORNETS': 'CHA',
+            'CHARLOTTE BOBCATS': 'CHA',
+            
+            'NETS': 'BKN',
+            'BROOKLYN NETS': 'BKN',
+            'NEW JERSEY NETS': 'BKN',
+            
+            'WARRIORS': 'GSW',
+            'GOLDEN STATE WARRIORS': 'GSW',
+            'SAN FRANCISCO WARRIORS': 'GSW',
+            
+            'SUNS': 'PHX',
+            'PHOENIX SUNS': 'PHX',
+            
+            'BLAZERS': 'POR',
+            'TRAIL BLAZERS': 'POR',
+            'PORTLAND TRAIL BLAZERS': 'POR',
+            
+            'SPURS': 'SAS',
+            'SAN ANTONIO SPURS': 'SAS',
+            
+            'RAPTORS': 'TOR',
+            'TORONTO RAPTORS': 'TOR',
+            
+            'BUCKS': 'MIL',
+            'MILWAUKEE BUCKS': 'MIL',
+            
+            'TIMBERWOLVES': 'MIN',
+            'MINNESOTA TIMBERWOLVES': 'MIN',
+            
+            'NUGGETS': 'DEN',
+            'DENVER NUGGETS': 'DEN',
+            
+            'HEAT': 'MIA',
+            'MIAMI HEAT': 'MIA',
+            
+            'CAVALIERS': 'CLE',
+            'CLEVELAND CAVALIERS': 'CLE',
+            'CAVS': 'CLE',
+            
+            'CELTICS': 'BOS',
+            'BOSTON CELTICS': 'BOS',
+            
+            'PISTONS': 'DET',
+            'DETROIT PISTONS': 'DET',
+            
+            'PACERS': 'IND',
+            'INDIANA PACERS': 'IND',
+            
+            'BULLS': 'CHI',
+            'CHICAGO BULLS': 'CHI',
+            
+            'MAVERICKS': 'DAL',
+            'DALLAS MAVERICKS': 'DAL',
+            
+            'MAGIC': 'ORL',
+            'ORLANDO MAGIC': 'ORL',
+            
+            'KNICKS': 'NYK',
+            'NEW YORK KNICKS': 'NYK',
+        }
     
     def standardize_team_names(self, df, team_cols=None):
         """
-        Standardize team names across all team-related columns.
-        
-        For example:
-        - "GS" -> "GOLDEN STATE WARRIORS"
-        - "PHX" -> "PHOENIX SUNS"
-        - "NOP" -> "NEW ORLEANS PELICANS"
+        Standardize team names to NBA three-letter codes.
         
         Args:
             df: DataFrame containing team names
@@ -73,62 +160,52 @@ class BaseNBACleaner:
                       If None, finds columns with 'team' in name
         
         Returns:
-            DataFrame with standardized team names
+            DataFrame with standardized team codes
         """
         if team_cols is None:
             team_cols = [col for col in df.columns if 'team' in col.lower()]
+            # Also check for common team name columns
+            extra_cols = ['tm', 'Team', 'TEAM_NAME']
+            team_cols.extend([col for col in extra_cols if col in df.columns])
         
+        df = df.copy()
         for col in team_cols:
-            if col in df.columns:
+            if col in df.columns and df[col].dtype == 'object':
+                # Convert to uppercase and strip whitespace
                 df[col] = df[col].str.strip().str.upper()
+                
+                # Map team names to standard three-letter codes
+                df[col] = df[col].map(lambda x: self.team_mappings.get(x, x) if pd.notnull(x) else x)
         
         return df
     
     def handle_numeric_columns(self, df):
-        """
-        Convert and clean numeric columns in the dataset.
+        """Convert and clean numeric columns in the dataset."""
+        # Get all columns except obvious categorical ones
+        exclude_patterns = ['name', 'team', 'position', 'date', 'season', 'location']
+        numeric_candidates = [col for col in df.columns 
+                            if not any(pattern in col.lower() for pattern in exclude_patterns)]
         
-        Operations performed:
-        1. Identifies columns with numeric data
-        2. Converts strings to proper numeric types
-        3. Handles missing values using median imputation
+        df = df.copy()
+        # Convert to numeric and handle missing values
+        for col in numeric_candidates:
+            try:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+                if df[col].isnull().any():
+                    median_val = df[col].median()
+                    if pd.isnull(median_val):  # If median is also NaN
+                        df[col] = df[col].fillna(0)
+                    else:
+                        df[col] = df[col].fillna(median_val)
+            except Exception as e:
+                print(f"Warning: Could not convert column {col} to numeric: {str(e)}")
+                continue
         
-        For example:
-        - "25.5" -> 25.5 (float)
-        - "" -> median value of column
-        - "N/A" -> median value of column
-        
-        Args:
-            df: DataFrame containing numeric columns
-            
-        Returns:
-            DataFrame with cleaned numeric columns
-        """
-        numeric_cols = df.select_dtypes(include=['int64', 'float64']).columns
-        for col in numeric_cols:
-            df[col] = pd.to_numeric(df[col], errors='coerce')
-            df[col] = df[col].fillna(df[col].median())
         return df
     
     def convert_percentages(self, df):
-        """
-        Convert percentage strings to decimal values.
-        
-        For example:
-        - "45.6%" -> 0.456
-        - "100%" -> 1.0
-        - "0%" -> 0.0
-        
-        Identifies percentage columns by looking for:
-        - 'percentage' in column name
-        - 'pct' in column name
-        
-        Args:
-            df: DataFrame containing percentage columns
-            
-        Returns:
-            DataFrame with percentages as decimal values
-        """
+        """Convert percentage strings to decimal values."""
+        df = df.copy()
         pct_cols = [col for col in df.columns if any(x in col.lower() for x in ['percentage', 'pct'])]
         for col in pct_cols:
             if df[col].dtype == 'object':
@@ -136,26 +213,11 @@ class BaseNBACleaner:
         return df
     
     def handle_dates(self, df, date_cols=None):
-        """
-        Convert date strings to datetime objects.
-        
-        Handles various date formats and standardizes them to datetime.
-        For example:
-        - "2023-01-15" -> datetime(2023, 1, 15)
-        - "01/15/2023" -> datetime(2023, 1, 15)
-        - "Jan 15 2023" -> datetime(2023, 1, 15)
-        
-        Args:
-            df: DataFrame containing date columns
-            date_cols: List of columns containing dates
-                      If None, finds columns with 'date' in name
-            
-        Returns:
-            DataFrame with standardized datetime columns
-        """
+        """Convert date strings to datetime objects."""
         if date_cols is None:
             date_cols = [col for col in df.columns if 'date' in col.lower()]
         
+        df = df.copy()
         for col in date_cols:
             if col in df.columns:
                 df[col] = pd.to_datetime(df[col], errors='coerce')
@@ -163,25 +225,8 @@ class BaseNBACleaner:
         return df
     
     def standardize_player_names(self, df, name_col='player_name'):
-        """
-        Standardize player names to consistent format.
-        
-        Operations performed:
-        1. Strips whitespace
-        2. Converts to uppercase
-        3. Ensures consistent formatting
-        
-        For example:
-        - "lebron james " -> "LEBRON JAMES"
-        - "CURRY,STEPHEN" -> "STEPHEN CURRY"
-        
-        Args:
-            df: DataFrame containing player names
-            name_col: Name of column containing player names
-            
-        Returns:
-            DataFrame with standardized player names
-        """
+        """Standardize player names to consistent format."""
+        df = df.copy()
         if name_col in df.columns:
             df[name_col] = df[name_col].str.strip().str.upper()
         return df
