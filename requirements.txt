@@ -71,12 +71,15 @@ numpy==2.2.0
 overrides==7.7.0
 packaging==24.2
 pandas==2.2.3
+pandoc==2.4
 pandocfilters==1.5.1
 parso==0.8.4
 pexpect==4.9.0
 pillow==11.0.0
 platformdirs==4.3.6
 plotly==5.24.1
+plumbum==1.9.0
+ply==3.11
 prometheus_client==0.21.1
 prompt_toolkit==3.0.48
 psutil==6.1.0
