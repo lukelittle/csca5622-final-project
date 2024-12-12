@@ -138,17 +138,101 @@ class FeatureBuilder:
             print(f"Error creating player features: {str(e)}")
             return pd.DataFrame()
     
-    def combine_features(self, team_features: pd.DataFrame, player_features: pd.DataFrame) -> tuple:
-        """Combine all feature sets and create target variable."""
+    def create_conference_features(self, team_stats: pd.DataFrame) -> pd.DataFrame:
+        """
+        Create conference-specific features for playoff prediction.
+        
+        Args:
+            team_stats (pd.DataFrame): Team statistics with conference data
+            
+        Returns:
+            pd.DataFrame: Conference-based features
+        """
+        # Add validation for required columns
+        required_cols = ['conference', 'season', 'team', 'pts_per_game', 'g']
+        missing_cols = [col for col in required_cols if col not in team_stats.columns]
+        if missing_cols:
+            raise ValueError(f"Missing required columns: {missing_cols}")
+        
+        conference_features = pd.DataFrame()
+        
+        # Group by season and conference for standings calculations
+        for (season, conference), group in team_stats.groupby(['season', 'conference']):
+            group = group.copy()
+            
+            # Calculate conference standings stats based on points per game
+            group['conf_rank'] = group['pts_per_game'].rank(ascending=False, method='min')
+            group['pts_behind_leader'] = group['pts_per_game'].max() - group['pts_per_game']
+            
+            # Calculate points behind 8th (playoff cutoff)
+            eighth_place_pts = group.nlargest(8, 'pts_per_game')['pts_per_game'].min()
+            group['pts_behind_8th'] = eighth_place_pts - group['pts_per_game']
+            
+            # Calculate relative stats within conference
+            conf_stats = group.agg({
+                'pts_per_game': ['mean', 'std'],
+                'g': ['mean', 'std']  # games played stats
+            })
+            
+            # Handle zero standard deviation case
+            pts_std = conf_stats['pts_per_game']['std'] or 1
+            
+            group['pts_vs_conf_avg'] = (
+                (group['pts_per_game'] - conf_stats['pts_per_game']['mean']) 
+                / pts_std
+            )
+            
+            # Games played relative to conference
+            games_std = conf_stats['g']['std'] or 1
+            group['games_vs_conf_avg'] = (
+                (group['g'] - conf_stats['g']['mean'])
+                / games_std
+            )
+            
+            # Add to conference features
+            if conference_features.empty:
+                conference_features = group
+            else:
+                conference_features = pd.concat([conference_features, group])
+        
+        # Select and rename relevant columns
+        final_features = conference_features[[
+            'season', 'team', 'conference',
+            'conf_rank', 'pts_behind_leader', 'pts_behind_8th',
+            'pts_vs_conf_avg', 'games_vs_conf_avg'
+        ]].copy()
+        
+        # Store statistics
+        self.feature_stats['conference_features'] = {
+            'n_features': len(final_features.columns) - 3,  # Exclude season, team, conference
+            'n_samples': len(final_features)
+        }
+        
+        return final_features
+
+    def combine_features(self, team_features: pd.DataFrame, player_features: pd.DataFrame,
+                        conference_features: pd.DataFrame) -> tuple:
+        """
+        Combine all feature sets and create target variable.
+        
+        Args:
+            team_features (pd.DataFrame): Team performance features
+            player_features (pd.DataFrame): Player composition features
+            conference_features (pd.DataFrame): Conference-based features
+            
+        Returns:
+            tuple: (feature_matrix, target) where feature_matrix contains only numeric features
+        """
         if 'playoffs' not in team_features.columns:
             raise ValueError("Team features must include 'playoffs' column for target variable")
         
         # Create copies to avoid modifying originals
         team_features = team_features.copy()
         player_features = player_features.copy()
+        conference_features = conference_features.copy()
         
         # Ensure team and season columns are the correct type
-        for df in [team_features, player_features]:
+        for df in [team_features, player_features, conference_features]:
             df['team'] = df['team'].astype(str)
             df['season'] = df['season'].astype(int)
         
@@ -157,23 +241,49 @@ class FeatureBuilder:
             player_features,
             on=['team', 'season'],
             how='left'
+        ).merge(
+            conference_features,
+            on=['team', 'season'],
+            how='left'
         )
         
-        # Create target variable
+        # Create target variable before any column drops
         target = features['playoffs'].astype(int)
         
         # Remove non-feature columns
-        drop_cols = ['playoffs', 'team', 'season', 'abbreviation', 'lg']
+        drop_cols = ['playoffs', 'team', 'season', 'abbreviation', 'lg', 'conference']
         features = features.drop(columns=[col for col in drop_cols if col in features.columns])
         
-        # Handle missing values
-        features = features.fillna(features.mean())
+        # Identify numeric and categorical columns
+        numeric_cols = features.select_dtypes(include=['int64', 'float64']).columns
+        categorical_cols = features.select_dtypes(include=['object']).columns
         
+        # Handle numeric columns
+        features[numeric_cols] = features[numeric_cols].fillna(features[numeric_cols].mean())
+        
+        # Convert any categorical columns that should be numeric
+        for col in categorical_cols:
+            try:
+                features[col] = pd.to_numeric(features[col], errors='coerce')
+                # If conversion successful, fill NAs with mean
+                if not features[col].isna().all():  # If not all NaN after conversion
+                    features[col] = features[col].fillna(features[col].mean())
+                    numeric_cols = numeric_cols.append(pd.Index([col]))
+            except (ValueError, TypeError):
+                # If conversion fails, drop the column
+                features = features.drop(columns=[col])
+                print(f"Dropped non-numeric column: {col}")
+        
+        # Keep only numeric columns in final feature matrix
+        features = features[numeric_cols]
+        
+        # Update feature statistics
         self.feature_stats['combined_features'] = {
             'n_features': len(features.columns),
             'n_samples': len(features),
             'feature_names': list(features.columns),
-            'target_distribution': target.value_counts().to_dict()
+            'target_distribution': target.value_counts().to_dict(),
+            'dropped_categorical_columns': list(categorical_cols)
         }
         
         return features, target
