@@ -1,0 +1,35 @@
+.cu-header h1 {
+    color: var(--cu-gold);
+    border-bottom: none;
+    margin: 0;
+}
+
+.cu-header p {
+    color: var(--cu-light-gray);
+    margin: 10px 0 0 0;
+}
+
+/* Footer */
+.cu-footer {
+    margin-top: 50px;
+    padding: 20px;
+    text-align: center;
+    border-top: 2px solid var(--cu-gold);
+    color: var(--cu-dark-gray);
+}
+
+/* Print styles */
+@media print {
+    body {
+        color: black;
+        background-color: white;
+    }
+    
+    a {
+        color: black;
+    }
+    
+    .input_area, .output_area {
+        border-left: 2px solid var(--cu-gold);
+    }
+}
