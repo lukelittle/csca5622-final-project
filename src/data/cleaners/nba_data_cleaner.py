@@ -34,6 +34,7 @@ class NBACleaner:
             'CAPITAL BULLETS': 'WAS',
             'BALTIMORE BULLETS': 'WAS',
             'WASHINGTON WIZARDS': 'WAS',
+            'WIZARDS': 'WAS',
             'CHICAGO ZEPHYRS': 'WAS',
             'CHICAGO PACKERS': 'WAS',
             
@@ -73,6 +74,7 @@ class NBACleaner:
             'OKLAHOMA CITY THUNDER': 'OKC',
             'SEATTLE SUPERSONICS': 'OKC',
             'SONICS': 'OKC',
+            'SEA': 'OKC',
             
             'GRIZZLIES': 'MEM',
             'MEMPHIS GRIZZLIES': 'MEM',
@@ -82,6 +84,8 @@ class NBACleaner:
             'NEW ORLEANS PELICANS': 'NOP',
             'NEW ORLEANS HORNETS': 'NOP',
             'NEW ORLEANS/OKLAHOMA CITY HORNETS': 'NOP',
+            'NOK': 'NOP',
+            'NOH': 'NOP',
             
             'JAZZ': 'UTA',
             'UTAH JAZZ': 'UTA',
@@ -90,11 +94,14 @@ class NBACleaner:
             'HORNETS': 'CHA',
             'CHARLOTTE HORNETS': 'CHA',
             'CHARLOTTE BOBCATS': 'CHA',
-            'BOBCATS':  'CHA',
+            'BOBCATS': 'CHA',
+            'CHO': 'CHA',
             
             'NETS': 'BKN',
             'BROOKLYN NETS': 'BKN',
             'NEW JERSEY NETS': 'BKN',
+            'NJN': 'BKN',
+            'BRK': 'BKN',
             
             'WARRIORS': 'GSW',
             'GOLDEN STATE WARRIORS': 'GSW',
@@ -102,6 +109,7 @@ class NBACleaner:
             
             'SUNS': 'PHX',
             'PHOENIX SUNS': 'PHX',
+            'PHO': 'PHX',
             
             'BLAZERS': 'POR',
             'TRAIL BLAZERS': 'POR',
@@ -230,4 +238,47 @@ class NBACleaner:
         df = df.copy()
         if name_col in df.columns:
             df[name_col] = df[name_col].str.strip().str.upper()
+        return df
+    
+    def add_conference_mappings(self, df, name_col='team'):
+
+        eastern_conf = [
+            'ATL',  # Atlanta Hawks
+            'BOS',  # Boston Celtics
+            'BKN',  # Brooklyn Nets
+            'CHA',  # Charlotte Hornets
+            'CHI',  # Chicago Bulls
+            'CLE',  # Cleveland Cavaliers
+            'DET',  # Detroit Pistons
+            'IND',  # Indiana Pacers
+            'MIA',  # Miami Heat
+            'MIL',  # Milwaukee Bucks
+            'NYK',  # New York Knicks
+            'ORL',  # Orlando Magic
+            'PHI',  # Philadelphia 76ers
+            'TOR',  # Toronto Raptors
+            'WAS'   # Washington Wizards
+        ]
+
+        western_conf = [
+            'DAL',  # Dallas Mavericks
+            'DEN',  # Denver Nuggets
+            'GSW',  # Golden State Warriors
+            'HOU',  # Houston Rockets
+            'LAC',  # Los Angeles Clippers
+            'LAL',  # Los Angeles Lakers
+            'MEM',  # Memphis Grizzlies
+            'MIN',  # Minnesota Timberwolves
+            'NOP',  # New Orleans Pelicans
+            'OKC',  # Oklahoma City Thunder
+            'PHX',  # Phoenix Suns
+            'POR',  # Portland Trail Blazers
+            'SAC',  # Sacramento Kings
+            'SAS',  # San Antonio Spurs
+            'UTA'   # Utah Jazz
+        ]
+
+        df['conference'] = df[name_col].apply(
+            lambda x: 'EAST' if x in eastern_conf else 'WEST' if x in western_conf else 'Unknown'
+        )
         return df
